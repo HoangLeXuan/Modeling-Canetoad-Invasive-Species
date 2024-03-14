@@ -1,0 +1,25 @@
+
+This archive (S1_Appendix.zip) contains the source code for the model presented in the
+paper 'A Landscape Approach to Invasive Species Management'.
+
+The model was implemented in R and there are two source files:
+
+1.- model-metapops.r is a self-contained script that can be run straightaway and
+will produce the output for the model metapopulation networks as described in the 
+main text. This script stores the output information in a .csv file containing the
+summary statistics for the simulation executions as well as a series of .pdf figures
+that are the panels in Figure 1 of the main manuscript.
+
+2.- real-world-metapops.r on the other hand, implements basically the same model but
+using the real-world landscapes described in the manuscript to create the metapopulation
+structure. It then runs the in-silico experiments on these real-world landscapes. Unlike
+the previous script this is dependant on the directory 'landscapes' which comes within
+the archive and should appear in this same directory. Within this directory, a series
+of .csv files describing the real-world landscapes generated as described in the main 
+text of the paper are contained. The script uses these files as input files to generate
+the real-world metapopulation structures on which to perform the in-silico management
+experiments. As with the previous script, pdf and csv files are produced as outputs for
+figures and summary stats respectively.
+
+Both source code scripts are commented for an easy understanding of the steps involved
+in the model executions.

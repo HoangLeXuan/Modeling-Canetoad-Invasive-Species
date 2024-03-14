@@ -1,0 +1,85 @@
+---
+title: "sdms_data_piping"
+author: "Hoang Le Xuan"
+date: "2024-03-07"
+output: html_document
+---
+
+```{r}
+library(raster)
+#install.packages("maptools")
+
+library(sf)
+library(dismo)
+#library(maptools)
+```
+
+```{r setup, include=FALSE}
+# pipe GBIF data
+jt_raw <- read.csv('data/Rhinella_marina/dat_cl_Rhinella_marina.csv') # grab GBIF
+
+jt <- data.frame(matrix(ncol = 2, nrow = length(jt_raw$decimalLongitude)))
+jt[,1] <- jt_raw$decimalLongitude
+jt[,2] <- jt_raw$decimalLatitude
+jt <- unique(jt) #  without duplicates
+jt <- jt[complete.cases(jt),] # remove na's
+colnames(jt) <- c('lon','lat')
+```
+
+
+
+
+```{r}
+# download Bioclim features
+e <- extent(-180, 180, -90, 90) # set study area extent
+
+# use dismo's getData to grab climate features
+bioclim.data <- getData(name = "worldclim",
+                        var = "bio",
+                        res = 2.5,
+                        path = "data/Rhinella_marina/")
+bioclim.data <- crop(bioclim.data, e*1.25)  # crop to bg point extent
+# write rasters to /data/Rhinella_marina/folder
+for (i in c(1:19)){
+  writeRaster(bioclim.data[[i]], paste('data/Rhinella_marina/bclim', i, sep = ''),
+              format="ascii", overwrite=TRUE)
+}
+```
+
+```{r}
+# sample background points from a slightly wider extent
+length_presences <- nrow(jt) 
+bg <- randomPoints(bioclim.data[[1]], length_presences*2, ext=e, extf = 1.25) 
+colnames(bg) <- c('lon','lat')
+train <- rbind(jt, bg)  # combine with presences
+pa_train <- c(rep(1, nrow(jt)), rep(0, nrow(bg))) # col of ones and zeros
+train <- data.frame(cbind(CLASS=pa_train, train)) # final dataframe
+
+```
+
+```{r}
+# create spatial points
+crs <- crs(bioclim.data[[1]])
+train <- train[sample(nrow(train)),]
+class.pa <- data.frame(train[,1])
+colnames(class.pa) <- 'CLASS'
+dataMap.jt  <- SpatialPointsDataFrame(train[,c(2,3)], class.pa,
+                                      proj4string =crs)
+# write as shp
+dataMap.jt_sf <- st_as_sfZ(dataMap.jt)
+# Define the output file path and name
+output_shapefile <- "data/Rhinella_marina/rhi_mar.shp"
+
+# Write the sf object to a shapefile
+st_write(dataMap.jt_sf, output_shapefile)
+
+```
+
+```{r}
+# plot our points
+plot(bioclim.data[[1]], main='Bioclim 1')
+points(bg, col='red', pch = 16,cex=.3)
+points(jt, col='black', pch = 16,cex=.3)
+plot(wrld_simpl, add=TRUE, border='dark grey')
+```
+

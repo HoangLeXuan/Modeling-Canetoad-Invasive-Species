@@ -1,0 +1,766 @@
+---
+title: "SDM_using_dismo_raster"
+author: "Hoang Le Xuan"
+date: "2024-03-08"
+output: html_document
+---
+
+Reference:https://rspatial.org/raster/sdm/2_sdm_occdata.html
+
+```{r}
+install.packages(c('raster', 'rgdal', 'dismo', 'rJava'))
+
+# loads the dismo library
+library(dismo)
+```
+
+```{r}
+path <- file.path(system.file(package="dismo"), 'ex')
+library(dismo)
+files <- list.files(path, pattern='grd$', full.names=TRUE )
+files
+
+file
+```
+
+
+
+```{r}
+ctgeo <- subset(canetoad, !is.na(lon) & !is.na(lat))
+dim(ctgeo)
+
+# ignoring (sub) species and other naming variation
+dups2 <- duplicated(ctgeo[, c('lon', 'lat')])
+# number of duplicates
+sum(dups2)
+
+# keep the records that are _not_ duplicated
+ctg <- ctgeo[!dups2, ]
+ctg
+ctgeo
+```
+
+```{r}
+library(maptools)
+data(wrld_simpl)
+plot(wrld_simpl, xlim=c(-180,180), ylim=c(0,0), axes=TRUE, col="light yellow")
+# restore the box around the map
+box()
+# add the points
+points(ctgeo$lon, ctgeo$lat, col='orange', pch=20, cex=0.75)
+# plot points again to add a border, for better visibility
+points(ctgeo$lon, ctgeo$lat, col='red', cex=0.75)
+```
+We can make a SpatialPointsDataFrame using the statistical function notation
+```{r}
+library(sp)
+coordinates(ctg) <- ~lon+lat
+crs(ctg) <- crs(wrld_simpl)
+class(ctg)
+```
+
+```{r}
+#use the coordinates to do a spatial query of the polygons in wrld_simpl (a SpatialPolygonsDataFrame)
+ovr <- over(ctg, wrld_simpl)
+class(wrld_simpl)
+
+head(ovr)
+cntr <- ovr$NAME
+
+```
+We should ask these two questions: (1) Which points (identified by their record numbers) do not match any country (that is, they are in an ocean)? (There are none (because we already removed the points that mapped in the ocean)). (2) Which points have coordinates that are in a different country than listed in the ‘country’ field of the gbif record
+
+```{r}
+i <- which(is.na(cntr))
+## integer(0)
+j <- which(cntr != ctg$country)
+# for the mismatches, bind the country names of the polygons and points
+cbind(cntr, ctg$country)[j,]
+```
+
+```{r}
+plot(ctg)
+plot(wrld_simpl, add=T, border='blue', lwd=2)
+points(ctg[j, ], col='red', pch=20, cex=2)
+```
+
+
+```{r}
+# create a RasterLayer with the extent of ctgeo
+r <- raster(ctg)
+# set the resolution of the cells to (for example) 1 degree
+res(r) <- 1
+# expand (extend) the extent of the RasterLayer a little
+r <- extend(r, extent(r)+1)
+# sample:
+ctsel <- gridSample(ctg, r, n=1)
+# to illustrate the method and show the result
+p <- rasterToPolygons(r)
+plot(p, border='gray')
+points(ctg)
+# selected points in red
+points(ctsel, cex=1, col='red', pch='x')
+```
+
+
+```{r}
+write.csv(ctsel, "C:/Users/HoangLe.HoangLeLaptop/AppData/Local/R/win-library/4.2/dismo/ex/canetoad.csv", row.names = FALSE)
+file <- paste(system.file(package="dismo"), '/ex/canetoad.csv', sep='')
+
+ctsel <- read.csv(file)
+ctsel
+```
+
+```{r}
+file <- paste(system.file(package="dismo"), '/ex/canetoad.csv', sep='')
+file
+acsel <- read.csv(file)
+```
+
+
+
+
+
+```{r}
+library(dismo)
+# get the file names
+files <- list.files(path=paste(system.file(package="dismo"), '/ex',
+                       sep=''),  pattern='grd',  full.names=TRUE )
+# we use the first file to create a RasterLayer
+mask <- raster(files[1])
+mask
+# select 500 random points
+# set seed to assure that the examples will always
+# have the same random sample.
+set.seed(1963)
+bg <- randomPoints(mask, 500 )
+```
+
+```{r}
+# set up the plotting area for two maps
+par(mfrow=c(1,2))
+plot(!is.na(mask), legend=FALSE)
+points(bg, cex=0.5)
+# now we repeat the sampling, but limit
+# the area of sampling using a spatial extent
+e <- extent(-80, -53, -39, -22)
+bg2 <- randomPoints(mask, 50, ext=e)
+plot(!is.na(mask), legend=FALSE)
+plot(e, add=TRUE, col='red')
+points(bg2, cex=0.5)
+```
+```{r}
+file <- paste(system.file(package="dismo"), '/ex/canetoad.csv', sep='')
+ct <- read.csv(file)
+```
+
+ct is a data.frame. Let’s change it into a SpatialPointsDataFrame
+
+```{r}
+coordinates(ct) <- ~lon+lat
+projection(ct) <- CRS('+proj=longlat +datum=WGS84')
+
+# circles with a radius of 50 km
+x <- circles(ct, d=50000, lonlat=TRUE)
+pol <- polygons(x)
+```
+Now get the names of all the files with extension “.grd” in this folder. The $ sign indicates that the files must end with the characters ‘grd’. By using full.names=TRUE, the full path names are retunred.
+
+```{r}
+path <- file.path(system.file(package="dismo"), 'ex')
+
+library(dismo)
+files <- list.files(path, pattern='grd$', full.names=TRUE )
+files
+```
+
+Now create a RasterStack of predictor variables.
+
+
+```{r}
+predictors <- stack(files)
+predictors
+## class      : RasterStack 
+## dimensions : 192, 186, 35712, 9  (nrow, ncol, ncell, nlayers)
+## resolution : 0.5, 0.5  (x, y)
+## extent     : -125, -32, -56, 40  (xmin, xmax, ymin, ymax)
+## crs        : +proj=longlat +ellps=WGS84 +towgs84=0,0,0,0,0,0,0 +no_defs 
+## names      : bio1, bio12, bio16, bio17, bio5, bio6, bio7, bio8, biome 
+## min values :  -23,     0,     0,     0,   61, -212,   60,  -66,     1 
+## max values :  289,  7682,  2458,  1496,  422,  242,  461,  323,    14
+
+names(predictors)
+## [1] "bio1"  "bio12" "bio16" "bio17" "bio5"  "bio6"  "bio7"  "bio8"  "biome"
+plot(predictors)
+```
+ First get the world boundaries and the canetoad data:
+ 
+```{r}
+
+file <- paste(system.file(package="dismo"), "/ex/canetoad.csv", sep="")
+
+canetoad_br <- read.table(file,  header=TRUE,  sep=',')
+# we do not need the first column
+#exra note: we actually need the first column
+#canetoad_br  <- canetoad_br[,-1]
+
+canetoad_br
+#plot the data
+# first layer of the RasterStack
+plot(predictors, 1)
+# note the "add=TRUE" argument with plot
+plot(wrld_simpl, add=TRUE)
+# with the points function, "add" is implicit
+points(canetoad_br, col='blue')
+```
+ Extracting values from rasters
+
+```{r}
+presvals <- extract(predictors, canetoad_br)
+# setting random seed to always create the same
+# random set of points for this example
+set.seed(0)
+backgr <- randomPoints(predictors, 500)
+absvals <- extract(predictors, backgr)
+pb <- c(rep(1, nrow(presvals)), rep(0, nrow(absvals)))
+sdmdata <- data.frame(cbind(pb, rbind(presvals, absvals)))
+sdmdata[,'biome'] = as.factor(sdmdata[,'biome'])
+summary(sdmdata)
+
+```
+```{r}
+pairs(sdmdata[,2:5], cex=0.1)
+
+```
+```{r}
+saveRDS(sdmdata, "sdm.Rds")
+saveRDS(presvals, "pvals.Rds")
+
+#load again;
+sdmdata <- readRDS("sdm.Rds")
+presvals <- readRDS("pvals.Rds")
+
+sdmdata
+```
+
+```{r}
+m1 <- glm(pb ~ bio1 + bio5 + bio12, data=sdmdata)
+class(m1)
+## [1] "glm" "lm"
+summary(m1)
+```
+```{r}
+m2 = glm(pb ~ ., data=sdmdata)
+m2
+```
+
+```{r}
+bc <- bioclim(presvals[,c('bio1', 'bio5', 'bio12')])
+class(bc)
+
+bc
+
+pairs(bc)
+
+```
+## Model prediction
+
+```{r}
+bio1 = c(40, 150, 200)
+bio5 = c(60, 115, 290)
+bio12 = c(600, 1600, 1700)
+pd = data.frame(cbind(bio1, bio5, bio12))
+pd
+##   bio1 bio5 bio12
+## 1   40	60	600		
+## 150	115	1600		
+## 200	290	1700	
+predict(m1, pd)
+##        1         2         3 
+##0.3390146 0.7348167 0.4547514
+predict(bc, pd)
+```
+```{r}
+response(bc)
+
+```
+```{r}
+predictors <- stack(list.files(file.path(system.file(package="dismo"), 'ex'), pattern='grd$', full.names=TRUE ))
+names(predictors)
+## [1] "bio1"  "bio12" "bio16" "bio17" "bio5"  "bio6"  "bio7"  "bio8"  "biome"
+p <- predict(predictors, m1)
+plot(p)
+```
+## Model evaluation:
+
+```{r}
+p <- rnorm(50, mean=0.7, sd=0.3)
+a <- rnorm(50, mean=0.4, sd=0.4)
+par(mfrow=c(1, 2))
+plot(sort(p), col='red', pch=21)
+points(sort(a), col='blue', pch=24)
+legend(1, 0.95 * max(a,p), c('presence', 'absence'),
+          pch=c(21,24), col=c('red', 'blue'))
+comb <- c(p,a)
+group <- c(rep('presence', length(p)), rep('absence', length(a)))
+boxplot(comb~group, col=c('blue', 'red'))
+```
+compute the correlation coefficient and the AUC
+
+```{r}
+group = c(rep(1, length(p)), rep(0, length(a)))
+cor.test(comb, group)$estimate
+##       cor
+## 0.4151511
+mv <- wilcox.test(p,a)
+auc <- as.numeric(mv$statistic) / (length(p) * length(a))
+auc
+```
+```{r}
+e <- evaluate(p=p, a=a)
+class(e)
+## [1] "ModelEvaluation"
+## attr(,"package")
+## [1] "dismo"
+e
+
+## class          : ModelEvaluation 
+## n presences    : 50 
+## n absences     : 50 
+## AUC            : 0.6592 
+## cor            : 0.2594386 
+## max TPR+TNR at : 0.4662509 
+par(mfrow=c(1, 2))
+density(e)
+boxplot(e, col=c('blue', 'red'))
+```
+
+Back to some real data, presence-only in this case. We’ll divide the data in two random sets, one for training a Bioclim model, and one for evaluating the model.
+
+```{r}
+samp <- sample(nrow(sdmdata), round(0.75 * nrow(sdmdata)))
+traindata <- sdmdata[samp,]
+traindata <- traindata[traindata[,1] == 1, 2:9]
+testdata <- sdmdata[-samp,]
+bc <- bioclim(traindata)
+e <- evaluate(testdata[testdata==1,], testdata[testdata==0,], bc)
+e
+## class          : ModelEvaluation 
+## n presences    : 135 
+## n absences     : 129 
+## AUC            : 0.6939133 
+## cor            : 0.2514218 
+## max TPR+TNR at : 0.0602674
+plot(e, 'ROC')
+```
+
+
+```{r}
+pres <- sdmdata[sdmdata[,1] == 1, 2:9]
+back <- sdmdata[sdmdata[,1] == 0, 2:9]
+```
+
+We now partition the data into 5 groups.
+
+```{r}
+k <- 5
+group <- kfold(pres, k)
+group[1:10]
+##  [1] 5 2 3 1 5 1 1 1 3 3
+unique(group)
+## [1] 5 2 3 1 4
+```
+
+```{r}
+e <- list()
+for (i in 1:k) {
+    train <- pres[group != i,]
+    test <- pres[group == i,]
+    bc <- bioclim(train)
+    e[[i]] <- evaluate(p=test, a=back, bc)
+}
+```
+
+```{r}
+auc <- sapply(e, function(x){x@auc})
+auc
+## [1] 0.7739565 0.8291739 0.7931250 0.7588696 0.7660435
+mean(auc)
+## [1] 0.7842337
+sapply( e, function(x){ threshold(x)['spec_sens'] } )
+```
+
+```{r}
+nr
+```
+
+```{r}
+file <- file.path(system.file(package="dismo"), "ex/canetoad.csv")
+
+canetoad <- read.table(file,  header=TRUE,  sep=',')
+#omit this
+#canetoad <- canetoad[,-1]
+presvals <- extract(predictors, canetoad)
+set.seed(0)
+backgr <- randomPoints(predictors, 500)
+nr <- nrow(canetoad)
+s <- sample(nr, 0.25 * nr)
+pres_train <- canetoad[-s, ]
+pres_test <- canetoad[s, ]
+nr <- nrow(backgr)
+set.seed(9)
+s <- sample(nr, 0.25 * nr)
+back_train <- backgr[-s, ]
+back_test <- backgr[s, ]
+```
+
+```{r}
+sb <- ssb(pres_test, back_test, pres_train)
+sb[,1] / sb[,2]
+```
+```{r}
+i <- pwdSample(pres_test, back_test, pres_train, n=1, tr=0.1)
+pres_test_pwd <- pres_test[!is.na(i[,1]), ]
+back_test_pwd <- back_test[na.omit(as.vector(i)), ]
+sb2 <- ssb(pres_test_pwd, back_test_pwd, pres_train)
+sb2[1]/ sb2[2]
+## [1] 1.004106
+```
+
+```{r}
+bc <- bioclim(predictors, pres_train)
+evaluate(bc, p=pres_test, a=back_test, x=predictors)
+## class          : ModelEvaluation
+## n presences    : 29
+## n absences     : 125
+## AUC            : 0.757931
+## cor            : 0.2777298
+## max TPR+TNR at : 0.03438276
+evaluate(bc, p=pres_test_pwd, a=back_test_pwd, x=predictors)
+```
+```{r}
+pred_nf <- dropLayer(predictors, 'biome')
+set.seed(0)
+group <- kfold(canetoad, 5)
+pres_train <- canetoad[group != 1, ]
+pres_test <- canetoad[group == 1, ]
+```
+
+To speed up processing, let’s restrict the predictions to a more restricted area (defined by a rectangular extent)
+
+```{r}
+ext <- extent(-90, -32, -33, 23)
+
+```
+The first layer in the RasterStack is used as a ‘mask’. That ensures that random points only occur within the spatial extent of the rasters, and within cells that are not NA, and that there is only a single absence point per cell. Here we further restrict the background points to be within 12.5% of our specified extent ‘ext’.
+
+
+```{r}
+set.seed(10)
+backg <- randomPoints(pred_nf, n=1000, ext=ext, extf = 1.25)
+colnames(backg) = c('lon', 'lat')
+group <- kfold(backg, 5)
+backg_train <- backg[group != 1, ]
+
+
+backg_test <- backg[group == 1, ]
+```
+
+```{r}
+extent(predictors)
+
+```
+
+
+```{r}
+r <- raster(pred_nf, 1)
+plot(!is.na(r), col=c('white', 'light grey'), legend=FALSE)
+plot(ext, add=TRUE, col='red', lwd=2)
+points(backg_train, pch='-', cex=0.5, col='yellow')
+points(backg_test, pch='-',  cex=0.5, col='black')
+points(pres_train, pch= '+', col='green')
+points(pres_test, pch='+', col='blue')
+```
+## Profile methods
+  
+The three methods described here, Bioclim, Domain, and Mahal. These methods are implemented in the dismo package, and the procedures to use these models are the same for all three.
+
+Bioclim model using data.frame with each row representing the environmental data at known sites of presence of a species. Here we fit a bioclim model simply using the predictors and the occurrence points (the function will do the extracting for us).
+
+```{r}
+bc <- bioclim(pred_nf, pres_train)
+plot(bc, a=1, b=2, p=0.85)
+```
+We evaluate the model in a similar way, by providing presence and background (absence) points, the model, and a RasterStack:
+
+```{r}
+e <- evaluate(pres_test, backg_test, bc, pred_nf)
+e
+```
+
+```{r}
+tr <- threshold(e, 'spec_sens')
+tr
+## [1] 0.08592151
+```
+And we use the RasterStack with predictor variables to make a prediction to a RasterLayer:
+
+```{r}
+pb <- predict(pred_nf, bc, ext=ext, progress='')
+pb
+## class      : RasterLayer
+## dimensions : 112, 116, 12992  (nrow, ncol, ncell)
+## resolution : 0.5, 0.5  (x, y)
+## extent     : -90, -32, -33, 23  (xmin, xmax, ymin, ymax)
+## crs        : +proj=longlat +datum=WGS84 +no_defs
+## source     : memory
+## names      : layer
+## values     : 0, 0.7096774  (min, max)
+par(mfrow=c(1,2))
+plot(pb, main='Bioclim, raw values')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+plot(pb > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+
+```
+Below we fit a domain model, evaluate it, and make a prediction. We map the prediction, as well as a map subjectively classified into presence / absence.
+
+```{r}
+dm <- domain(pred_nf, pres_train)
+e <- evaluate(pres_test, backg_test, dm, pred_nf)
+e
+## class          : ModelEvaluation
+## n presences    : 23
+## n absences     : 200
+## AUC            : 0.7097826
+## cor            : 0.2138087
+## max TPR+TNR at : 0.7107224
+pd = predict(pred_nf, dm, ext=ext, progress='')
+par(mfrow=c(1,2))
+plot(pd, main='Domain, raw values')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(e, 'spec_sens')
+plot(pd > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+```
+## Mahalanobis distance
+
+```{r}
+mm <- mahal(pred_nf, pres_train)
+e <- evaluate(pres_test, backg_test, mm, pred_nf)
+e
+## class          : ModelEvaluation
+## n presences    : 23
+## n absences     : 200
+## AUC            : 0.7686957
+## cor            : 0.1506777
+## max TPR+TNR at : 0.1116504
+pm = predict(pred_nf, mm, ext=ext, progress='')
+par(mfrow=c(1,2))
+pm[pm < -10] <- -10
+plot(pm, main='Mahalanobis distance')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(e, 'spec_sens')
+plot(pm > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+```
+## Classical regression models
+
+```{r}
+train <- rbind(pres_train, backg_train)
+
+pb_train <- c(rep(1, nrow(pres_train)), rep(0, nrow(backg_train)))
+
+typeof(train)
+envtrain <- extract(predictors, train)
+envtrain
+
+extent(predictors)
+
+envtrain <- data.frame( cbind(pa=pb_train, envtrain) )
+envtrain[,'biome'] = factor(envtrain[,'biome'], levels=1:14)
+head(envtrain)
+##   pa bio1 bio12 bio16 bio17 bio5 bio6 bio7 bio8 biome
+## 1  1  263  1639   724    62  338  191  147  261     1
+## 2  1  263  1639   724    62  338  191  147  261     1
+## 3  1  253  3624  1547   373  329  150  179  271     1
+## 4  1  243  1693   775   186  318  150  168  264     1
+## 5  1  252  2501  1081   280  326  154  172  270     1
+## 6  1  240  1214   516   146  317  150  168  261     2
+testpres <- data.frame( extract(predictors, pres_test) )
+testbackg <- data.frame( extract(predictors, backg_test) )
+testpres[ ,'biome'] = factor(testpres[ ,'biome'], levels=1:14)
+testbackg[ ,'biome'] = factor(testbackg[ ,'biome'], levels=1:14)
+```
+outside of reading, checking if raster outside the range
+
+```{r}
+library(raster)
+library(sp)
+
+# Assuming your 'train' data frame is structured like the one in the image you provided
+coordinates(train) <- ~lon+lat
+
+# Now set the CRS for 'train' to match the CRS of the predictors raster
+# (Replace the EPSG code with the actual code for your predictors raster)
+crs(train) <- crs(predictors)
+
+head(data.frame(coordinates(train)))
+```
+
+check if range is outside reach
+```{r}
+# Get the extent of the raster
+raster_extent <- extent(predictors)
+
+# Check if each point is within the raster extent
+inside <- apply(coordinates(train), 1, function(point) {
+  raster_extent@xmin <= point[1] && point[1] <= raster_extent@xmax &&
+  raster_extent@ymin <= point[2] && point[2] <= raster_extent@ymax
+})
+
+# 'inside' will be a logical vector indicating whether each point is inside the raster extent
+print(inside)
+
+```
+
+
+## Generalized Linear Models
+
+```{r}
+gm1 <- glm(pa ~ bio1 + bio5 + bio6 + bio7 + bio8 + bio12 + bio16 + bio17,
+            family = binomial(link = "logit"), data=envtrain)
+summary(gm1)
+```
+```{r}
+coef(gm1)
+
+```
+```{r}
+gm2 <- glm(pa ~ bio1+bio5 + bio6 + bio7 + bio8 + bio12 + bio16 + bio17,
+            family = gaussian(link = "identity"), data=envtrain)
+evaluate(testpres, testbackg, gm1)
+
+```
+```{r}
+ge2 <- evaluate(testpres, testbackg, gm2)
+ge2
+```
+```{r}
+ext <- extent(-90, -32, -33, 23)
+#ext <- extent(-180, 180, 0, 0)
+
+```
+
+
+```{r}
+pg <- predict(predictors, gm2, ext=ext)
+
+par(mfrow=c(1,2))
+plot(pg, main='GLM/gaussian, raw values')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(ge2, 'spec_sens')
+plot(pg > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+points(backg_train, pch='-', cex=0.25)
+```
+## Generalized Additive Models
+
+# Machine learning methods
+Methods include Artifical Neural Networks (ANN), Random Forests, Boosted Regression Trees, and Support Vector Machines.
+
+MaxEnt (short for “Maximum Entropy”; Phillips et al., 2006) is the most widely used SDM algorithm.
+
+```{r}
+maxent()
+## Loading required namespace: rJava
+## This is MaxEnt version 3.4.3
+xm <- maxent(predictors, pres_train, factors='biome')
+## This is MaxEnt version 3.4.3
+plot(xm)
+```
+A response plot:
+```{r}
+response(xm)
+
+```
+
+```{r}
+e <- evaluate(pres_test, backg_test, xm, predictors)
+e
+## class          : ModelEvaluation
+## n presences    : 23
+## n absences     : 200
+## AUC            : 0.8336957
+## cor            : 0.3789954
+## max TPR+TNR at : 0.1772358
+px <- predict(predictors, xm, ext=ext, progress='')
+par(mfrow=c(1,2))
+plot(px, main='Maxent, raw values')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(e, 'spec_sens')
+plot(px > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+```
+### Boosted Regression Trees
+### Random Forest
+ rf1 does regression, rf2 and rf3 do classification (they are exactly the same models). See the function tuneRF for optimizing the model fitting procedure.
+ 
+```{r}
+library(randomForest)
+model <- pa ~ bio1 + bio5 + bio6 + bio7 + bio8 + bio12 + bio16 + bio17
+rf1 <- randomForest(model, data=envtrain)
+
+model <- factor(pa) ~ bio1 + bio5 + bio6 + bio7 + bio8 + bio12 + bio16 + bio17
+rf2 <- randomForest(model, data=envtrain)
+rf3 <- randomForest(envtrain[,1:8], factor(pb_train))
+erf <- evaluate(testpres, testbackg, rf1)
+erf
+```
+```{r}
+pr <- predict(predictors, rf1, ext=ext)
+par(mfrow=c(1,2))
+plot(pr, main='Random Forest, regression')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(erf, 'spec_sens')
+plot(pr > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+points(backg_train, pch='-', cex=0.25)
+
+```
+### Support Vector Machines
+
+unction ‘ksvm’ in package ‘kernlab’ and the ‘svm’ function in package ‘e1071’. ‘ksvm’ includes many different SVM formulations and kernels and provides useful options and features like a method for plotting, but it lacks a proper model selection tool. The ‘svm’ function in package ‘e1071’ includes a model selection tool: the ‘tune’ function (Karatzoglou et al., 2006)
+```{r}
+library(kernlab)
+##
+## Attaching package: 'kernlab'
+## The following objects are masked from 'package:raster':
+##
+##     buffer, rotated
+svm <- ksvm(pa ~ bio1+bio5+bio6+bio7+bio8+bio12+bio16+bio17, data=envtrain)
+esv <- evaluate(testpres, testbackg, svm)
+esv
+## class          : ModelEvaluation
+## n presences    : 23
+## n absences     : 200
+## AUC            : 0.7576087
+## cor            : 0.3738667
+## max TPR+TNR at : 0.02857293
+ps <- predict(predictors, svm, ext=ext)
+par(mfrow=c(1,2))
+plot(ps, main='Support Vector Machine')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(esv, 'spec_sens')
+plot(ps > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+points(backg_train, pch='-', cex=0.25)
+```
+
