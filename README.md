@@ -8,6 +8,6 @@ le_h2@Denison.edu
 ### Purpose
 
 ### Data
-data.zip and input.zip contain data about the species occurrence and Raster Layers are >100mb, currently figuring out the way to update those
+data.zip and input.zip contain data about the species occurrence and Raster Layers are >100mb, currently figuring out the way to push those
 
 ### Code
