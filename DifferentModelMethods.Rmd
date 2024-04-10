@@ -12,6 +12,9 @@ Reference:https://rspatial.org/
 library(dismo)
 library(maptools)
 
+library(raster)
+library(sp)
+
 #Uncomment if you wanna downlaod these packages
 #install.packages("e1071")
 #install.packages('caret', dependencies = TRUE)
@@ -130,15 +133,22 @@ And we use the RasterStack with predictor variables to make a prediction to a Ra
 ```{r}
 pb <- predict(predictors, bc, ext=ext, progress='')
 pb
-## class      : RasterLayer
-## dimensions : 112, 116, 12992  (nrow, ncol, ncell)
-## resolution : 0.5, 0.5  (x, y)
-## extent     : -90, -32, -33, 23  (xmin, xmax, ymin, ymax)
-## crs        : +proj=longlat +datum=WGS84 +no_defs
+## class      : RasterLayer 
+## dimensions : 792, 960, 760320  (nrow, ncol, ncell)
+## resolution : 0.04166667, 0.04166667  (x, y)
+## extent     : 113, 153, -43, -10  (xmin, xmax, ymin, ymax)
+## crs        : +proj=longlat +datum=WGS84 +no_defs 
 ## source     : memory
-## names      : layer
-## values     : 0, 0.7096774  (min, max)
+## names      : layer 
+## values     : 0, 0.5405007  (min, max)
+
+
+```
+
+```{r}
 par(mfrow=c(1,2))
+par(mar=c(5, 4, 4, 2) + 0.1)
+
 plot(pb, main='Bioclim, raw values')
 plot(wrld_simpl, add=TRUE, border='dark grey')
 plot(pb > tr, main='presence/absence')
@@ -147,21 +157,29 @@ points(pres_train, pch='+')
 
 ```
 
+
 ### Domain
 Below we fit a domain model, evaluate it, and make a prediction. We map the prediction, as well as a map subjectively classified into presence / absence.
 
+The Domain algorithm (Carpenter et al. 1993) has been extensively used for species distribution modeling. Will explain further in the research
 ```{r}
 dm <- domain(predictors, pres_train)
 e <- evaluate(pres_test, backg_test, dm, predictors)
 e
 ## class          : ModelEvaluation
-## n presences    : 23
+## n presences    : 168
 ## n absences     : 200
-## AUC            : 0.7097826
-## cor            : 0.2138087
-## max TPR+TNR at : 0.7107224
+## AUC            : 0.7711756 
+## cor            : 0.3948721 
+## max TPR+TNR at : 0.6173924 
 pd = predict(predictors, dm, ext=ext, progress='')
+
+```
+
+```{r}
 par(mfrow=c(1,2))
+par(mar=c(5, 4, 4, 2) + 0.1)
+
 plot(pd, main='Domain, raw values')
 plot(wrld_simpl, add=TRUE, border='dark grey')
 tr <- threshold(e, 'spec_sens')
@@ -169,14 +187,13 @@ plot(pd > tr, main='presence/absence')
 plot(wrld_simpl, add=TRUE, border='dark grey')
 points(pres_train, pch='+')
 ```
-## Mahalanobis distance
+### Mahalanobis distance
 
 ```{r}
 which(is.na(predictors), arr.ind=TRUE)
 typeof(predictors)
 colnames(predictors)
-```
-
+```   
 
 ```{r}
 mm <- mahal(predictors, pres_train)
@@ -200,6 +217,8 @@ points(pres_train, pch='+')
 ```
 ## Classical regression models
 
+With the exception of ‘maxent’, we cannot fit the model with a RasterStack and points. Instead, we need to extract the environmental data values ourselves, and fit the models with these values.
+
 ```{r}
 train <- rbind(pres_train, backg_train)
 pb_train <- c(rep(1, nrow(pres_train)), rep(0, nrow(backg_train)))
@@ -222,87 +241,33 @@ testpres <- data.frame( extract(predictors, pres_test) )
 testbackg <- data.frame( extract(predictors, backg_test) )
 
 ```
+
+## Generalized Linear Models
+
+### family = binomial(link = "logit")
+
+
 ```{r}
 # logistic regression:
 gm1 <- glm(pa ~ bclim12 +bclim15 +bclim16 +bclim2 +bclim3 +bclim5 +bclim8 +bclim6,
             family = binomial(link = "logit"), data=envtrain)
 
 summary(gm1)
-```
 
-outside of reading, checking if raster outside the range
-
-```{r}
-library(raster)
-library(sp)
-
-# Assuming your 'train' data frame is structured like the one in the image you provided
-coordinates(train) <- ~lon+lat
-
-# Now set the CRS for 'train' to match the CRS of the predictors raster
-# (Replace the EPSG code with the actual code for your predictors raster)
-crs(train) <- crs(predictors)
-
-head(data.frame(coordinates(train)))
-```
-
-check if range is outside reach
-```{r}
-# Get the extent of the raster
-raster_extent <- extent(predictors)
-
-# Check if each point is within the raster extent
-inside <- apply(coordinates(train), 1, function(point) {
-  raster_extent@xmin <= point[1] && point[1] <= raster_extent@xmax &&
-  raster_extent@ymin <= point[2] && point[2] <= raster_extent@ymax
-})
-
-# 'inside' will be a logical vector indicating whether each point is inside the raster extent
-
-```
-
-
-
-
-
-## Generalized Linear Models
-
-```{r}
-gm1 <- glm(pa ~ .,
-            family = binomial(link = "logit"), data=envtrain)
-summary(gm1)
-```
-
-```{r}
 coef(gm1)
 
-envtrain
+evaluate(testpres, testbackg, gm1)
 
 ```
 
-
-[Modify this]
+### family = gaussian(link = "identity"), data=envtrain
 ```{r}
-gm2 <- glm(pa ~ bclim1 + bclim5 + bclim6 + bclim7 + bclim8 + bclim12 + bclim16 + bclim17,
+gm2 <- glm(pa ~ bclim12 +bclim15 +bclim16 +bclim2 +bclim3 +bclim5 +bclim8 +bclim6,
             family = gaussian(link = "identity"), data=envtrain)
-ge1 <- evaluate(testpres, testbackg, gm1)
-ge1
-```
 
-
-```{r}
 ge2 <- evaluate(testpres, testbackg, gm2)
 ge2
 ```
-
-
-
-```{r}
-ext <- extent(-90, -32, -33, 23)
-#ext <- extent(-180, 180, 0, 0)
-
-```
-
 
 ```{r}
 pg <- predict(predictors, gm2, ext=ext)
@@ -314,24 +279,30 @@ plot(pg > tr, main='presence/absence')
 plot(wrld_simpl, add=TRUE, border='dark grey')
 points(pres_train, pch='+')
 points(backg_train, pch='-', cex=0.25)
-```
-## Generalized Additive Models
 
-# Machine learning methods
+```
+
+### Generalized Additive Models
+
+## Machine learning methods
+
 Methods include Artifical Neural Networks (ANN), Random Forests, Boosted Regression Trees, and Support Vector Machines.
 
 MaxEnt (short for “Maximum Entropy”; Phillips et al., 2006) is the most widely used SDM algorithm.
 
 ```{r}
 maxent()
-## Loading required namespace: rJava
+## Loading required namespace: rJava. So download Java 64 bit for windows
 ## This is MaxEnt version 3.4.3
-xm <- maxent(predictors, pres_train, factors='biome')
+xm <- maxent(predictors, pres_train)
 ## This is MaxEnt version 3.4.3
 plot(xm)
 ```
 A response plot:
 ```{r}
+par("mar")
+par(mar=c(1,1,1,1))
+
 response(xm)
 
 ```
@@ -355,15 +326,19 @@ plot(wrld_simpl, add=TRUE, border='dark grey')
 points(pres_train, pch='+')
 ```
 ### Boosted Regression Trees
+
+
 ### Random Forest
  rf1 does regression, rf2 and rf3 do classification (they are exactly the same models). See the function tuneRF for optimizing the model fitting procedure.
  
 ```{r}
 library(randomForest)
-model <- pa ~ bio1 + bio5 + bio6 + bio7 + bio8 + bio12 + bio16 + bio17
+
+
+model <- pa ~ bclim12 +bclim15 +bclim16 +bclim2 +bclim3 +bclim5 +bclim8 +bclim6
 rf1 <- randomForest(model, data=envtrain)
 
-model <- factor(pa) ~ bio1 + bio5 + bio6 + bio7 + bio8 + bio12 + bio16 + bio17
+model <- factor(pa) ~ bclim12 +bclim15 +bclim16 +bclim2 +bclim3 +bclim5 +bclim8 +bclim6
 rf2 <- randomForest(model, data=envtrain)
 rf3 <- randomForest(envtrain[,1:8], factor(pb_train))
 erf <- evaluate(testpres, testbackg, rf1)
@@ -392,17 +367,17 @@ library(kernlab)
 ## The following objects are masked from 'package:raster':
 ##
 ##     buffer, rotated
-svm <- ksvm(pa ~ bio1+bio5+bio6+bio7+bio8+bio12+bio16+bio17, data=envtrain)
+svm <- ksvm(pa ~ bclim12 +bclim15 +bclim16 +bclim2 +bclim3 +bclim5 +bclim8 +bclim6, data=envtrain)
 
 #svm <- ksvm(pa ~ ., data=envtrain)
 esv <- evaluate(testpres, testbackg, svm)
 esv
-## class          : ModelEvaluation
-## n presences    : 23
-## n absences     : 200
-## AUC            : 0.7576087
-## cor            : 0.3738667
-## max TPR+TNR at : 0.02857293
+## class          : ModelEvaluation 
+## n presences    : 168 
+## n absences     : 200 
+## AUC            : 0.907381 
+## cor            : 0.6926611 
+## max TPR+TNR at : 0.320362
 ps <- predict(predictors, svm, ext=ext)
 par(mfrow=c(1,2))
 plot(ps, main='Support Vector Machine')
@@ -413,16 +388,30 @@ plot(wrld_simpl, add=TRUE, border='dark grey')
 points(pres_train, pch='+')
 points(backg_train, pch='-', cex=0.25)
 ```
-For evaluating SVM
 
+### Combining model predictions
+```{r}
+models <- stack(pb, pd, pg, pr, ps)
+names(models) <- c("BIOCLIM", "Domain algorithm", "GLM", "Random Forest", "Support Vector Machine")
+plot(models)
+```
+
+Now we can compute the simple average:
+
+```{r}
+m <- mean(models)
+plot(m, main='Average Score of 5 different models')
+```
+
+However, this is a problematic approach as the values predicted by the models are not all on the same (between 0 and 1) scale; so you may want to fix that first. Another concern could be weighting. Let’s combine three models weighted by their AUC scores. Here, to create the weights, we substract 0.5 (the random expectation) and square the result to give further weight to higher AUC values.
 
 ```{r}
 
-#library(caret)
+library(caret)
 
 
 # Make predictions on the test dataset
-predictions <- predict(predictors, svm, ext=ext)
+#predictions <- predict(predictors, svm, ext=ext)
 
 # Generate the confusion matrix
 confusionMatrix <- confusionMatrix(predictions, envtest$pa)
