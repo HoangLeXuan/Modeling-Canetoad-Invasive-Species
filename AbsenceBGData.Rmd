@@ -1,0 +1,113 @@
+---
+title: "Absence_presence_data"
+author: "Hoang Le Xuan"
+date: "2024-04-04"
+output: html_document
+---
+
+## Absence and background points
+
+first get the list of filenames with the predictor raster data
+
+```{r}
+library(dismo)
+library(maptools)
+data(wrld_simpl)
+```
+
+```{r}
+files <- list.files(path="data/bioclim",  pattern='asc',  full.names=TRUE )
+
+# we use the first file to create a RasterLayer
+mask <- raster(files[1])
+
+# select 500 random points
+# set seed to assure that the examples will always
+# have the same random sample.
+set.seed(1963)
+bg <- randomPoints(mask, 500 )
+```
+And inspect the results by plotting
+
+```{r}
+# set up the plotting area for two maps
+par(mfrow=c(1,2))
+plot(!is.na(mask), legend=FALSE)
+points(bg, cex=0.5)
+# now we repeat the sampling, but limit
+# the area of sampling using a spatial extent
+
+e <- extent(-180, 180, -90, 90)
+bg2 <- randomPoints(mask, 50, ext=e)
+plot(!is.na(mask), legend=FALSE)
+plot(e, add=TRUE, col='red')
+points(bg2, cex=0.5)
+```
+## Creating SpatialPointsDataFrame
+```{r}
+ct <- read.csv("data/ctsel.csv")
+
+coordinates(ct) <- ~lon+lat
+projection(ct) <- CRS('+proj=longlat +datum=WGS84')
+```
+
+## Environmental data
+### Raster data
+
+create a RasterStack of predictor variables.
+
+```{r}
+predictors <- stack(files)
+predictors
+
+#class      : RasterStack 
+#dimensions : 3600, 8640, 31104000, 19  (nrow, ncol, ncell, nlayers)
+#resolution : 0.04166667, 0.04166667  (x, y)
+#extent     : -180, 180, -60, 90  (xmin, xmax, ymin, ymax)
+#crs        : +proj=longlat +datum=WGS84 +no_defs 
+#names      : bclim1, bclim10, bclim11, bclim12, bclim13, bclim14, bclim15, bclim16, bclim17, bclim18, bclim19, bclim2, bclim3, bclim4, bclim5, 
+
+names(predictors)
+#[1] "bclim1"  "bclim10" "bclim11" "bclim12" "bclim13" "bclim14" "bclim15" "bclim16" "bclim17" "bclim18"
+#[11] "bclim19" "bclim2"  "bclim3"  "bclim4"  "bclim5"  "bclim6"  "bclim7"  "bclim8"  "bclim9" 
+```
+Overlay the data point to the bioclim1 map:
+```{r}
+# first layer of the RasterStack
+plot(predictors, 1)
+# note the "add=TRUE" argument with plot
+plot(wrld_simpl, add=TRUE)
+# with the points function, "add" is implicit
+points(ct, col='blue')
+```
+
+## Extracting values from rasters
+
+```{r}
+presvals <- extract(predictors, ct)
+# setting random seed to always create the same
+# random set of points for this example
+set.seed(0)
+backgr <- randomPoints(predictors, 500)
+absvals <- extract(predictors, backgr)
+pb <- c(rep(1, nrow(presvals)), rep(0, nrow(absvals)))
+sdmdata <- data.frame(cbind(pb, rbind(presvals, absvals)))
+
+sdmdata
+
+```
+
+```{r}
+summary(sdmdata)
+pairs(sdmdata[,2:5], cex=0.1)
+
+```
+
+```{r}
+saveRDS(sdmdata, "sdm.Rds")
+saveRDS(presvals, "pvals.Rds")
+
+#load again;
+sdmdata <- readRDS("sdm.Rds")
+presvals <- readRDS("pvals.Rds")
+```

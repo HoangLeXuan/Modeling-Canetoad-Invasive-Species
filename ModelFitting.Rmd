@@ -1,0 +1,639 @@
+---
+title: "SDM_using_dismo_raster: Prediction"
+author: "Hoang Le Xuan"
+date: "2024-03-08"
+output: html_document
+---
+
+Reference:https://rspatial.org/raster/sdm/2_sdm_occdata.html
+
+```{r}
+#install.packages(c('raster', 'rgdal', 'dismo', 'rJava'))
+library(dismo)
+library(maptools)
+data(wrld_simpl)
+
+library(dismo)
+sdmdata <- readRDS("sdm.Rds")
+presvals <- readRDS("pvals.Rds")
+```
+
+```{r}
+m1 <- glm(pb ~ ., data=sdmdata)
+class(m1)
+## [1] "glm" "lm"
+summary(m1)
+
+#Call:
+#glm(formula = pb ~ ., data = sdmdata)
+#
+#Coefficients: (1 not defined because of singularities)
+#              Estimate Std. Error t value Pr(>|t|)    
+#(Intercept)  3.931e-01  1.257e-01   3.127 0.001807 ** 
+#bclim1      -6.570e-03  3.730e-03  -1.761 0.078457 .  
+#bclim10      2.371e-03  6.628e-03   0.358 0.720581    
+#bclim11      9.426e-03  5.395e-03   1.747 0.080834 .  
+#bclim12     -1.958e-04  7.753e-05  -2.526 0.011663 *  
+#bclim13     -9.956e-04  5.347e-04  -1.862 0.062808 .  
+#bclim14     -3.258e-03  1.807e-03  -1.802 0.071712 .  
+#bclim15     -2.460e-03  5.394e-04  -4.561 5.57e-06 ***
+#bclim16      9.743e-04  2.514e-04   3.876 0.000111 ***
+#bclim17      1.082e-03  6.342e-04   1.706 0.088219 .  
+#bclim18      3.719e-05  9.063e-05   0.410 0.681591    
+#bclim19     -7.470e-05  6.750e-05  -1.107 0.268624    
+#bclim2       7.806e-03  1.597e-03   4.889 1.14e-06 ***
+#bclim3       3.407e-03  1.553e-03   2.194 0.028393 *  
+#bclim4       2.622e-04  1.364e-04   1.922 0.054844 .  
+#bclim5      -1.170e-02  1.786e-03  -6.554 8.02e-11 ***
+#bclim6       4.035e-03  1.777e-03   2.271 0.023327 *  
+#bclim7              NA         NA      NA       NA    
+#bclim8       3.100e-03  4.728e-04   6.556 7.88e-11 ***
+#bclim9       6.681e-04  3.862e-04   1.730 0.083855 .  
+#---
+#Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+#
+#(Dispersion parameter for gaussian family taken to be 0.1259178)
+
+#    Null deviance: 314.54  on 1347  degrees of freedom
+#Residual deviance: 167.34  on 1329  degrees of freedom
+#  (1 observation deleted due to missingness)
+#AIC: 1053.1
+
+#Number of Fisher Scoring iterations: 2
+
+```
+
+Bioclim uses presence data, so we use ‘presvals’ instead of ‘sdmdata’.
+```{r}
+bc <- bioclim(presvals[,colnames(presvals)])
+bc <- bioclim(presvals[,c("bclim12", "bclim15",  "bclim16",  "bclim2",  "bclim3", "bclim5", "bclim8", "bclim6" )])
+
+class(bc)
+#[1] "Bioclim"
+#attr(,"package")
+#[1] "dismo"
+
+bc
+
+pairs(bc)
+```
+
+## Model prediction
+
+response plots for each variable, with the other variables at their median value.
+```{r}
+response(bc)
+
+```
+
+The purpose is SDM is to create a map of suitability scores. We create by providing the predict function with a Raster* object and a model object.
+
+```{r}
+predictors <- stack(list.files(path="data/bioclim",  pattern='asc',  full.names=TRUE ))
+names(predictors)
+## [ [1] "bclim1"  "bclim10" "bclim11" "bclim12" "bclim13" "bclim14" "bclim15" "bclim16" "bclim17" "bclim18"
+## [11] "bclim19" "bclim2"  "bclim3"  "bclim4"  "bclim5"  "bclim6"  "bclim7"  "bclim8"  "bclim9"
+p <- predict(predictors, m1)
+```
+
+```{r}
+plot(p)
+
+```
+
+## Model evaluation:
+
+illustrate the computation of the correlation coefficient and AUC with two random variables. p (presence) has higher values, and represents the predicted value for 50 known cases (locations) where the species is present, and a (absence) has lower values, and represents the predicted value for 50 known cases (locations) where the species is absent.
+
+```{r}
+p <- rnorm(50, mean=0.7, sd=0.3)
+a <- rnorm(50, mean=0.4, sd=0.4)
+par(mfrow=c(1, 2))
+plot(sort(p), col='red', pch=21)
+points(sort(a), col='blue', pch=24)
+legend(1, 0.95 * max(a,p), c('presence', 'absence'),
+          pch=c(21,24), col=c('red', 'blue'))
+comb <- c(p,a)
+group <- c(rep('presence', length(p)), rep('absence', length(a)))
+boxplot(comb~group, col=c('blue', 'red'))
+```
+Compute the correlation coefficient and the AUC
+
+```{r}
+group = c(rep(1, length(p)), rep(0, length(a)))
+cor.test(comb, group)$estimate
+##       cor
+## 0.4151511
+mv <- wilcox.test(p,a)
+auc <- as.numeric(mv$statistic) / (length(p) * length(a))
+auc
+```
+```{r}
+e <- evaluate(p=p, a=a)
+class(e)
+## [1] "ModelEvaluation"
+## attr(,"package")
+## [1] "dismo"
+e
+
+## class          : ModelEvaluation 
+## n presences    : 50 
+## n absences     : 50 
+## AUC            : 0.6592 
+## cor            : 0.2594386 
+## max TPR+TNR at : 0.4662509 
+par(mfrow=c(1, 2))
+density(e)
+boxplot(e, col=c('blue', 'red'))
+```
+
+Back to some real data, presence-only in this case. We’ll divide the data in two random sets, one for training a Bioclim model, and one for evaluating the model.
+
+```{r}
+samp <- sample(nrow(sdmdata), round(0.75 * nrow(sdmdata)))
+traindata <- sdmdata[samp,]
+traindata <- traindata[traindata[,1] == 1, 2:9]
+testdata <- sdmdata[-samp,]
+bc <- bioclim(traindata)
+e <- evaluate(testdata[testdata==1,], testdata[testdata==0,], bc)
+e
+##class          : ModelEvaluation 
+##n presences    : 220 
+##n absences     : 117 
+##AUC            : 0.8366939 
+##cor            : 0.4202167 
+##max TPR+TNR at : 0.05244777 
+plot(e, 'ROC')
+```
+## k-fold data partitioning
+first create presence and background data
+```{r}
+pres <- sdmdata[sdmdata[,1] == 1, 2:9]
+back <- sdmdata[sdmdata[,1] == 0, 2:9]
+
+#k <- 5
+group <- kfold(pres, k)
+group[1:10]
+##  [1] 5 2 2 5 4 3 1 3 5 4
+unique(group)
+## [1]  5 2 4 3 1
+
+##fit and test our model five times. In each run, the records corresponding to one of the five groups is only used to evaluate the model, while the other four groups are only used to fit the model. The results are stored in a list called ‘e’.
+e <- list()
+for (i in 1:k) {
+    train <- pres[group != i,]
+    test <- pres[group == i,]
+    bc <- bioclim(train)
+    e[[i]] <- evaluate(p=test, a=back, bc)
+}
+```
+
+
+```{r}
+auc <- sapply(e, function(x){x@auc})
+auc
+## [1] 0.7739565 0.8291739 0.7931250 0.7588696 0.7660435
+mean(auc)
+## [1] 0.7842337
+sapply( e, function(x){ threshold(x)['spec_sens'] } )
+```
+
+```{r}
+e <- list()
+for (i in 1:k) {
+    train <- pres[group != i,]
+    test <- pres[group == i,]
+    bc <- bioclim(train)
+    e[[i]] <- evaluate(p=test, a=back, bc)
+}
+```
+
+```{r}
+auc <- sapply(e, function(x){x@auc})
+auc
+## [1] 0.7739565 0.8291739 0.7931250 0.7588696 0.7660435
+mean(auc)
+## [1] 0.7842337
+sapply( e, function(x){ threshold(x)['spec_sens'] } )
+```
+
+
+
+```{r}
+canetoad <- read.table("data/ctsel.csv", header = T, sep=',')
+canetoad <- canetoad[,-1]
+
+#omit this
+#canetoad <- canetoad[,-1]
+presvals <- extract(predictors, canetoad)
+set.seed(0)
+backgr <- randomPoints(predictors, 500)
+nr <- nrow(canetoad)
+s <- sample(nr, 0.25 * nr)
+pres_train <- canetoad[-s, ]
+pres_test <- canetoad[s, ]
+nr <- nrow(backgr)
+set.seed(9)
+s <- sample(nr, 0.25 * nr)
+back_train <- backgr[-s, ]
+back_test <- backgr[s, ]
+```
+
+```{r}
+sb <- ssb(pres_test, back_test, pres_train)
+sb[,1] / sb[,2]
+```
+
+```{r}
+i <- pwdSample(pres_test, back_test, pres_train, n=1, tr=0.1)
+pres_test_pwd <- pres_test[!is.na(i[,1]), ]
+back_test_pwd <- back_test[na.omit(as.vector(i)), ]
+sb2 <- ssb(pres_test_pwd, back_test_pwd, pres_train)
+sb2[1]/ sb2[2]
+## [1] 1.004106
+```
+
+```{r}
+bc <- bioclim(predictors, pres_train)
+evaluate(bc, p=pres_test, a=back_test, x=predictors)
+## class          : ModelEvaluation
+## n presences    : 29
+## n absences     : 125
+## AUC            : 0.757931
+## cor            : 0.2777298
+## max TPR+TNR at : 0.03438276
+evaluate(bc, p=pres_test_pwd, a=back_test_pwd, x=predictors)
+```
+```{r}
+pred_nf <- dropLayer(predictors, 'biome')
+set.seed(0)
+group <- kfold(canetoad, 5)
+pres_train <- canetoad[group != 1, ]
+pres_test <- canetoad[group == 1, ]
+
+pres_train
+
+```
+
+To speed up processing, let’s restrict the predictions to a more restricted area (defined by a rectangular extent)
+
+```{r}
+ext <- extent(-90, -32, -33, 23)
+
+```
+The first layer in the RasterStack is used as a ‘mask’. That ensures that random points only occur within the spatial extent of the rasters, and within cells that are not NA, and that there is only a single absence point per cell. Here we further restrict the background points to be within 12.5% of our specified extent ‘ext’.
+
+
+```{r}
+set.seed(10)
+backg <- randomPoints(pred_nf, n=1000, ext=ext, extf = 1.25)
+colnames(backg) = c('lon', 'lat')
+group <- kfold(backg, 5)
+backg_train <- backg[group != 1, ]
+
+
+backg_test <- backg[group == 1, ]
+```
+
+```{r}
+extent(predictors)
+
+```
+
+
+```{r}
+r <- raster(pred_nf, 1)
+plot(!is.na(r), col=c('white', 'light grey'), legend=FALSE)
+plot(ext, add=TRUE, col='red', lwd=2)
+points(backg_train, pch='-', cex=0.5, col='yellow')
+points(backg_test, pch='-',  cex=0.5, col='black')
+points(pres_train, pch= '+', col='green')
+points(pres_test, pch='+', col='blue')
+```
+## Profile methods
+  
+The three methods described here, Bioclim, Domain, and Mahal. These methods are implemented in the dismo package, and the procedures to use these models are the same for all three.
+
+Bioclim model using data.frame with each row representing the environmental data at known sites of presence of a species. Here we fit a bioclim model simply using the predictors and the occurrence points (the function will do the extracting for us).
+
+```{r}
+bc <- bioclim(pred_nf, pres_train)
+plot(bc, a=1, b=2, p=0.85)
+```
+We evaluate the model in a similar way, by providing presence and background (absence) points, the model, and a RasterStack:
+
+```{r}
+e <- evaluate(pres_test, backg_test, bc, pred_nf)
+e
+```
+
+```{r}
+tr <- threshold(e, 'spec_sens')
+tr
+## [1] 0.08592151
+```
+And we use the RasterStack with predictor variables to make a prediction to a RasterLayer:
+
+```{r}
+pb <- predict(pred_nf, bc, ext=ext, progress='')
+pb
+## class      : RasterLayer
+## dimensions : 112, 116, 12992  (nrow, ncol, ncell)
+## resolution : 0.5, 0.5  (x, y)
+## extent     : -90, -32, -33, 23  (xmin, xmax, ymin, ymax)
+## crs        : +proj=longlat +datum=WGS84 +no_defs
+## source     : memory
+## names      : layer
+## values     : 0, 0.7096774  (min, max)
+par(mfrow=c(1,2))
+plot(pb, main='Bioclim, raw values')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+plot(pb > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+
+```
+Below we fit a domain model, evaluate it, and make a prediction. We map the prediction, as well as a map subjectively classified into presence / absence.
+
+```{r}
+dm <- domain(pred_nf, pres_train)
+e <- evaluate(pres_test, backg_test, dm, pred_nf)
+e
+## class          : ModelEvaluation
+## n presences    : 23
+## n absences     : 200
+## AUC            : 0.7097826
+## cor            : 0.2138087
+## max TPR+TNR at : 0.7107224
+pd = predict(pred_nf, dm, ext=ext, progress='')
+par(mfrow=c(1,2))
+plot(pd, main='Domain, raw values')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(e, 'spec_sens')
+plot(pd > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+```
+## Mahalanobis distance
+
+```{r}
+mm <- mahal(pred_nf, pres_train)
+e <- evaluate(pres_test, backg_test, mm, pred_nf)
+e
+## class          : ModelEvaluation
+## n presences    : 23
+## n absences     : 200
+## AUC            : 0.7686957
+## cor            : 0.1506777
+## max TPR+TNR at : 0.1116504
+pm = predict(pred_nf, mm, ext=ext, progress='')
+par(mfrow=c(1,2))
+pm[pm < -10] <- -10
+plot(pm, main='Mahalanobis distance')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(e, 'spec_sens')
+plot(pm > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+```
+## Classical regression models
+
+```{r}
+train <- rbind(pres_train, backg_train)
+
+pb_train <- c(rep(1, nrow(pres_train)), rep(0, nrow(backg_train)))
+
+typeof(train)
+envtrain <- extract(predictors, train)
+envtrain
+
+extent(predictors)
+
+envtrain <- data.frame( cbind(pa=pb_train, envtrain) )
+envtrain[,'biome'] = factor(envtrain[,'biome'], levels=1:14)
+head(envtrain)
+##   pa bio1 bio12 bio16 bio17 bio5 bio6 bio7 bio8 biome
+## 1  1  263  1639   724    62  338  191  147  261     1
+## 2  1  263  1639   724    62  338  191  147  261     1
+## 3  1  253  3624  1547   373  329  150  179  271     1
+## 4  1  243  1693   775   186  318  150  168  264     1
+## 5  1  252  2501  1081   280  326  154  172  270     1
+## 6  1  240  1214   516   146  317  150  168  261     2
+testpres <- data.frame( extract(predictors, pres_test) )
+testbackg <- data.frame( extract(predictors, backg_test) )
+testpres[ ,'biome'] = factor(testpres[ ,'biome'], levels=1:14)
+testbackg[ ,'biome'] = factor(testbackg[ ,'biome'], levels=1:14)
+```
+outside of reading, checking if raster outside the range
+
+```{r}
+library(raster)
+library(sp)
+
+# Assuming your 'train' data frame is structured like the one in the image you provided
+coordinates(train) <- ~lon+lat
+
+# Now set the CRS for 'train' to match the CRS of the predictors raster
+# (Replace the EPSG code with the actual code for your predictors raster)
+crs(train) <- crs(predictors)
+
+head(data.frame(coordinates(train)))
+```
+
+check if range is outside reach
+```{r}
+# Get the extent of the raster
+raster_extent <- extent(predictors)
+
+# Check if each point is within the raster extent
+inside <- apply(coordinates(train), 1, function(point) {
+  raster_extent@xmin <= point[1] && point[1] <= raster_extent@xmax &&
+  raster_extent@ymin <= point[2] && point[2] <= raster_extent@ymax
+})
+
+# 'inside' will be a logical vector indicating whether each point is inside the raster extent
+print(inside)
+
+```
+
+```{r}
+envtrain
+```
+
+
+
+## Generalized Linear Models
+
+```{r}
+gm1 <- glm(pa ~ .,
+            family = binomial(link = "logit"), data=envtrain)
+summary(gm1)
+```
+```{r}
+coef(gm1)
+
+```
+```{r}
+gm2 <- glm(pa ~ bio1+bio5 + bio6 + bio7 + bio8 + bio12 + bio16 + bio17,
+            family = gaussian(link = "identity"), data=envtrain)
+ge1 <- evaluate(testpres, testbackg, gm1)
+ge1
+```
+
+```{r}
+ge2 <- evaluate(testpres, testbackg, gm2)
+ge2
+```
+```{r}
+ext <- extent(-90, -32, -33, 23)
+#ext <- extent(-180, 180, 0, 0)
+
+```
+
+
+```{r}
+pg <- predict(predictors, gm2, ext=ext)
+par(mfrow=c(1,2))
+plot(pg, main='GLM/gaussian, raw values')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(ge2, 'spec_sens')
+plot(pg > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+points(backg_train, pch='-', cex=0.25)
+```
+## Generalized Additive Models
+
+# Machine learning methods
+Methods include Artifical Neural Networks (ANN), Random Forests, Boosted Regression Trees, and Support Vector Machines.
+
+MaxEnt (short for “Maximum Entropy”; Phillips et al., 2006) is the most widely used SDM algorithm.
+
+```{r}
+maxent()
+## Loading required namespace: rJava
+## This is MaxEnt version 3.4.3
+xm <- maxent(predictors, pres_train, factors='biome')
+## This is MaxEnt version 3.4.3
+plot(xm)
+```
+A response plot:
+```{r}
+response(xm)
+
+```
+
+```{r}
+e <- evaluate(pres_test, backg_test, xm, predictors)
+e
+## class          : ModelEvaluation
+## n presences    : 23
+## n absences     : 200
+## AUC            : 0.8336957
+## cor            : 0.3789954
+## max TPR+TNR at : 0.1772358
+px <- predict(predictors, xm, ext=ext, progress='')
+par(mfrow=c(1,2))
+plot(px, main='Maxent, raw values')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(e, 'spec_sens')
+plot(px > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+```
+### Boosted Regression Trees
+### Random Forest
+ rf1 does regression, rf2 and rf3 do classification (they are exactly the same models). See the function tuneRF for optimizing the model fitting procedure.
+ 
+```{r}
+library(randomForest)
+model <- pa ~ bio1 + bio5 + bio6 + bio7 + bio8 + bio12 + bio16 + bio17
+rf1 <- randomForest(model, data=envtrain)
+
+model <- factor(pa) ~ bio1 + bio5 + bio6 + bio7 + bio8 + bio12 + bio16 + bio17
+rf2 <- randomForest(model, data=envtrain)
+rf3 <- randomForest(envtrain[,1:8], factor(pb_train))
+erf <- evaluate(testpres, testbackg, rf1)
+erf
+```
+```{r}
+pr <- predict(predictors, rf1, ext=ext)
+par(mfrow=c(1,2))
+plot(pr, main='Random Forest, regression')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(erf, 'spec_sens')
+plot(pr > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+points(backg_train, pch='-', cex=0.25)
+
+```
+### Support Vector Machines
+
+unction ‘ksvm’ in package ‘kernlab’ and the ‘svm’ function in package ‘e1071’. ‘ksvm’ includes many different SVM formulations and kernels and provides useful options and features like a method for plotting, but it lacks a proper model selection tool. The ‘svm’ function in package ‘e1071’ includes a model selection tool: the ‘tune’ function (Karatzoglou et al., 2006)
+```{r}
+library(kernlab)
+##
+## Attaching package: 'kernlab'
+## The following objects are masked from 'package:raster':
+##
+##     buffer, rotated
+svm <- ksvm(pa ~ bio1+bio5+bio6+bio7+bio8+bio12+bio16+bio17, data=envtrain)
+
+#svm <- ksvm(pa ~ ., data=envtrain)
+esv <- evaluate(testpres, testbackg, svm)
+esv
+## class          : ModelEvaluation
+## n presences    : 23
+## n absences     : 200
+## AUC            : 0.7576087
+## cor            : 0.3738667
+## max TPR+TNR at : 0.02857293
+ps <- predict(predictors, svm, ext=ext)
+par(mfrow=c(1,2))
+plot(ps, main='Support Vector Machine')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+tr <- threshold(esv, 'spec_sens')
+plot(ps > tr, main='presence/absence')
+plot(wrld_simpl, add=TRUE, border='dark grey')
+points(pres_train, pch='+')
+points(backg_train, pch='-', cex=0.25)
+```
+For evaluating SVM
+```{r}
+install.packages("e1071")
+install.packages('caret', dependencies = TRUE)
+
+```
+```{r}
+library(e1071)
+#library(caret)
+
+
+# Make predictions on the test dataset
+predictions <- predict(predictors, svm, ext=ext)
+
+# Generate the confusion matrix
+confusionMatrix <- confusionMatrix(predictions, envtest$pa)
+
+# Print the confusion matrix
+print(confusionMatrix)
+
+# Calculate performance metrics
+accuracy <- confusionMatrix$overall['Accuracy']
+precision <- confusionMatrix$byClass['Precision']
+recall <- confusionMatrix$byClass['Recall']
+specificity <- confusionMatrix$byClass['Specificity']
+F1_score <- 2 * (precision * recall) / (precision + recall)
+AUC <- roc(envtest$pa, as.numeric(predictions))$auc
+
+# Print performance metrics
+cat("Accuracy:", accuracy, "\n")
+cat("Precision:", precision, "\n")
+cat("Recall (Sensitivity):", recall, "\n")
+cat("Specificity:", specificity, "\n")
+cat("F1 Score:", F1_score, "\n")
+cat("AUC:", AUC, "\n")
+
+```
+

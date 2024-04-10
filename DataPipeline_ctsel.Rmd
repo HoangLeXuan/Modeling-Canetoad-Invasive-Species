@@ -1,0 +1,137 @@
+---
+title: "SDM_using_dismo_raster"
+author: "Hoang Le Xuan"
+date: "2024-03-08"
+output: html_document
+---
+
+Reference:https://rspatial.org/raster/sdm/2_sdm_occdata.html
+
+```{r}
+#install.packages('terra', repos='https://rspatial.r-universe.dev')
+#install.packages("raster", repos='https://rspatial.r-universe.dev')
+#install.packages("dismo")
+
+# loads the dismo library
+library(dismo)
+library(sf)
+library(stars)
+library(raster)
+
+#install.packages("maptools", repos = "https://packagemanager.posit.co/cran/2023-10-13")
+library(maptools)
+
+```
+
+```{r}
+canetoad <- read.csv("data/canetoad.csv")
+dim(canetoad) # [1] 26838     1
+colnames(canetoad)
+#1] "X"                             "species"                       "lon"                          
+# [4] "lat"                           "countryCode"                   "individualCount"              
+# [7] "gbifID"                        "family"                        "taxonRank"                    
+#[10] "coordinateUncertaintyInMeters" "year"                          "basisOfRecord"                
+#[13] "institutionCode"               "datasetName" 
+
+ctgeo <- subset(canetoad, !is.na(lon) & !is.na(lat))
+dim(ctgeo)
+#[1] 41134    14
+
+# ignoring (sub) species and other naming variation
+dups2 <- duplicated(ctgeo[, c('lon', 'lat')])
+# number of duplicates
+sum(dups2)
+
+# keep the records that are _not_ duplicated
+ctg <- ctgeo[!dups2, ]
+
+
+```
+
+```{r}
+
+data(wrld_simpl)
+plot(wrld_simpl, xlim=c(-180,180), ylim=c(0,0), axes=TRUE, col="light yellow")
+# restore the box around the map
+box()
+# add the points
+points(ctgeo$lon, ctgeo$lat, col='orange', pch=20, cex=0.75)
+# plot points again to add a border, for better visibility
+points(ctgeo$lon, ctgeo$lat, col='red', cex=0.75)
+```
+## Duplicate records
+
+```{r}
+# differentiating by (sub) species
+# dups2 <- duplicated(acgeo[, c('species', 'lon', 'lat')])
+# ignoring (sub) species and other naming variation
+dups2 <- duplicated(ctgeo[, c('lon', 'lat')])
+# number of duplicates
+sum(dups2)
+## [1] 17202
+# keep the records that are _not_ duplicated
+ctg <- ctgeo[!dups2, ]
+# left with 23,932 rows
+ctg
+```
+
+## Cross-checking
+
+We can make a SpatialPointsDataFrame using the statistical function notation
+```{r}
+library(sp)
+coordinates(ctg) <- ~lon+lat
+crs(ctg) <- crs(wrld_simpl)
+class(ctg)
+
+#[1] "SpatialPointsDataFrame"
+#attr(,"package")
+#[1] "sp"
+```
+
+```{r}
+#use the coordinates to do a spatial query of the polygons in wrld_simpl (a SpatialPolygonsDataFrame)
+ovr <- over(ctg, wrld_simpl)
+ovr <- na.omit(ovr)
+
+cntr <- ovr$NAME
+
+i <- which(is.na(cntr))
+i
+## integer(0)
+j <- which(cntr != ctg$country)
+# for the mismatches, bind the country names of the polygons and points
+cbind(cntr, ctg$country)[j,]
+
+plot(ctg)
+plot(wrld_simpl, add=T, border='blue', lwd=2)
+points(ctg[j, ], col='red', pch=20, cex=2)
+```
+
+Indicating no mismatch data point
+
+
+```{r}
+# create a RasterLayer with the extent of ctgeo
+r <- raster(ctg)
+# set the resolution of the cells to (for example) 1 degree
+res(r) <- 1
+# expand (extend) the extent of the RasterLayer a little
+r <- extend(r, extent(r)+1)
+
+# sample points from the ctg object, it samples a specified number of points (n=1) within each cell of the raster, based on the coverage of ctg:
+ctsel <- gridSample(ctg, r, n=1)
+# to illustrate the method and show the result
+p <- rasterToPolygons(r)
+plot(p, border='gray')
+points(ctg)
+# selected points in red
+points(ctsel, cex=1, col='red', pch='x')
+```
+
+```{r}
+write.csv(ctsel, "data/ctsel.csv")
+
+```
+
+
