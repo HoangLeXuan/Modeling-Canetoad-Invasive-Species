@@ -5,6 +5,8 @@ date: "2024-04-04"
 output: html_document
 ---
 
+Reference:https://rspatial.org/
+
 ## Absence and background points
 
 first get the list of filenames with the predictor raster data
@@ -85,11 +87,14 @@ points(ct, col='blue')
 
 ```{r}
 presvals <- extract(predictors, ct)
+# Predictor values
 # setting random seed to always create the same
 # random set of points for this example
 set.seed(0)
 backgr <- randomPoints(predictors, 500)
 absvals <- extract(predictors, backgr)
+
+#Presence Absence point
 pb <- c(rep(1, nrow(presvals)), rep(0, nrow(absvals)))
 sdmdata <- data.frame(cbind(pb, rbind(presvals, absvals)))
 

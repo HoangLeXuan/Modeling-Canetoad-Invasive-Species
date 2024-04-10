@@ -5,7 +5,7 @@ date: "2024-03-08"
 output: html_document
 ---
 
-Reference:https://rspatial.org/raster/sdm/2_sdm_occdata.html
+Reference:https://rspatial.org/
 
 ```{r}
 #install.packages('terra', repos='https://rspatial.r-universe.dev')
