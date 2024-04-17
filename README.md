@@ -9,7 +9,9 @@ This repository contains the research and code used in the study "Modeling Invas
 The study employs several modeling approaches to predict the presence and spread of Cane Toads in Australia, including Generalized Linear Models (GLM), BIOCLIM, Domain, Support Vector Machine (SVM), MaxEnt, and Random Forest.
 
 The repository includes the final paper that provides a detailed account of the methodology, the data analyzed, model evaluations, and the results, including a geospatial prediction map. The findings are significant for biodiversity conservation and the development of targeted management strategies to mitigate the impact of Cane Toads.
+
 ### Purpose
+Fun of learning
 
 ### Data
 data.zip and input.zip contain data about the species occurrence, and Raster Layers are >100mb. Currently, I am figuring out a way to push those files without extensive problems.
