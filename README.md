@@ -36,7 +36,7 @@ Le, H. X. (2024). Modeling the Dynamics of Invasive Species with Distribution Mo
 https://github.com/HoangLeXuan/modeling-invasive-species
 
 ### Acknowledgements
-The author thanks the contributors to the WorldClim database and The Global Biodiversity Information Facility (GBIF) and all referenced works that have made this study possible. The author would love to extend thanks to Dr. Supp for their guidance and Lena Le at [here]([url](https://github.com/lenaledenison)) for their extended reviews of the research, without their the research wouldn't be completed. 
+The author thanks the contributors to the WorldClim database and The Global Biodiversity Information Facility (GBIF) and all referenced works that have made this study possible. The author would love to extend thanks to Dr. Supp for their guidance and Lena Le at [here](https://github.com/lenaledenison) for their extended reviews of the research, without their the research wouldn't be completed. 
 
 ### Contact
 For any inquiries regarding the study or collaborations, please contact [le_h2@denison.edu] provided in the paper.
