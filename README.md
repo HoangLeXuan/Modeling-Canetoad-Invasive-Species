@@ -32,6 +32,7 @@ Researchers and practitioners in invasive species management and ecological mode
 
 ### Citation
 To cite this repository in your work, please use the following:
+
 Le, H. X. (2024). Modeling the Dynamics of Invasive Species with Distribution Models to Inform Management Strategies: A Case Study on Cane Toads. GitHub.
 https://github.com/HoangLeXuan/modeling-invasive-species
 
