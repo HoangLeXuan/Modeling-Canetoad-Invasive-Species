@@ -15,7 +15,7 @@ Fun of learning
 
 ### Data
 data.zip and input.zip contain data about the species occurrence, and Raster Layers are >100mb. Currently, I am figuring out a way to push those files without extensive problems.
-For Terrestrial Ecoregions of the World data, refer to the package's documentation and download the full documentation at [here]([url](https://www.worldwildlife.org/publications/terrestrial-ecoregions-of-the-world))
+For Terrestrial Ecoregions of the World data, refer to the package's documentation and download the full documentation at [here](https://www.worldwildlife.org/publications/terrestrial-ecoregions-of-the-world)
 
 ### Code
 
