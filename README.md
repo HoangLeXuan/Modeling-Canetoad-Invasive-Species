@@ -1,5 +1,5 @@
 # README for Modeling Invasive Species Dynamics and Distribution Repository
-This repository contains the research and code used in the study "Modeling Invasive Species Dynamics and Distribution to Guide Management Strategies: A Case Study on Cane Toads in Australia" by[ Hoang Le](https://github.com/HoangLeXuan). The research aims to comprehensively assess potential cane toad distribution in Australia using statistical and machine learning models to inform management strategies and combat the spread of this invasive species. 
+This repository contains the research and code used in the study "Modeling Invasive Species Dynamics and Distribution to Guide Management Strategies: A Case Study on Cane Toads in Australia" by[ Hoang Le](https://github.com/HoangLeXuan). The research aims to comprehensively assess potential cane toad distribution in Australia using statistical and machine learning models. 
 
 ### About the Author
 [Hoang. X. Le](https://github.com/HoangLeXuan)
